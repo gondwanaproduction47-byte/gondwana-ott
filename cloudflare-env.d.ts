@@ -1,0 +1,1 @@
+declare namespace Cloudflare {interface Env {DB?:D1Database;BUCKET?:R2Bucket;OWNER_EMAIL?:string;PUBLIC_ORIGIN?:string;RAZORPAY_KEY_ID?:string;RAZORPAY_KEY_SECRET?:string;RAZORPAY_WEBHOOK_SECRET?:string;PAYMENTS_ENABLED?:string;PAYMENT_SETTINGS_KEY?:string;}}
