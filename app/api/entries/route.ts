@@ -1,0 +1,4 @@
+import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {db,json,failure,permissions} from '@/lib/server';
+export const dynamic='force-dynamic';
+export async function GET(){try{const u=await getChatGPTUser();const result=await db().prepare(`SELECT p.poster_key IS NOT NULL AS has_poster,p.thumbnail_key IS NOT NULL AS has_thumbnail,p.id,p.candidate_id,p.event_id,p.episode_group_id,p.description,p.duration_seconds,p.vote_eligible,p.singer,p.song,p.city,p.content_type,p.genre,p.series_title,p.season,p.episode,p.published_at,${(await permissions(u)).canEvents?'COUNT(v.user_id) AS votes,':''}MAX(CASE WHEN v.user_id = ? THEN 1 ELSE 0 END) AS voted FROM performances p LEFT JOIN votes v ON v.entry_id = p.id WHERE p.status = 'published' GROUP BY p.id ORDER BY p.published_at DESC`).bind(u?.userId||'').all();return json({entries:result.results})}catch(e){return failure(e)}}

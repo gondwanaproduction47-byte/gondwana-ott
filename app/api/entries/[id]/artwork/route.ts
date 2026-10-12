@@ -1,0 +1,12 @@
+import {getChatGPTUser} from '@/app/chatgpt-auth';
+import {db,bucket,json,failure,sameOrigin,staff,permissions,validId,HttpError} from '@/lib/server';
+function column(req:Request){const kind=new URL(req.url).searchParams.get('kind');if(kind!=='poster'&&kind!=='thumbnail')throw new HttpError(400,'पोस्टर या थंबनेल चुनें।');return kind==='poster'?'poster_key':'thumbnail_key'}
+export async function PUT(req:Request,{params}:{params:Promise<{id:string}>}){
+ try{sameOrigin(req);await staff('upload');const id=validId((await params).id),col=column(req);const item=await db().prepare('SELECT id FROM performances WHERE id=?').bind(id).first();if(!item)throw new HttpError(404,'वीडियो नहीं मिली।');
+ const max=2*1024*1024;if(Number(req.headers.get('content-length')||0)>max)throw new HttpError(413,'इमेज अधिकतम 2 MB की रखें।');const reader=req.body?.getReader();if(!reader)throw new HttpError(400,'इमेज चुनें।');const chunks:Uint8Array[]=[];let length=0;while(true){const {value,done}=await reader.read();if(done)break;length+=value.length;if(length>max){await reader.cancel();throw new HttpError(413,'इमेज अधिकतम 2 MB की रखें।')}chunks.push(value)}const bytes=new Uint8Array(length);let offset=0;for(const part of chunks){bytes.set(part,offset);offset+=part.length}
+ const png=bytes.length>8&&[137,80,78,71,13,10,26,10].every((n,i)=>bytes[i]===n);const jpeg=bytes.length>3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255;if(!png&&!jpeg)throw new HttpError(400,'JPG या PNG इमेज चुनें।');const key=`artwork/${id}/${col}/${crypto.randomUUID()}`;await bucket().put(key,bytes,{httpMetadata:{contentType:png?'image/png':'image/jpeg'}});try{await db().prepare(`UPDATE performances SET ${col}=? WHERE id=?`).bind(key,id).run()}catch(e){await bucket().delete(key).catch(()=>{});throw e}return json({saved:true});
+ }catch(e){return failure(e)}
+}
+export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){
+ try{const id=validId((await params).id),col=column(req);const item=await db().prepare(`SELECT ${col} AS artwork,status FROM performances WHERE id=?`).bind(id).first<{artwork:string|null;status:string}>();if(!item?.artwork||(item.status!=='published'&&!(await permissions(await getChatGPTUser())).canUpload))throw new HttpError(404,'इमेज नहीं मिली।');const object=await bucket().get(item.artwork);if(!object)throw new HttpError(404,'इमेज नहीं मिली।');return new Response(object.body,{headers:{'Content-Type':object.httpMetadata?.contentType||'image/jpeg','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}})}catch(e){return failure(e)}
+}

@@ -1,0 +1,8 @@
+'use client';
+import {useState} from 'react';
+import type {VideoEntry} from './video-shelves';
+export default function ArtworkManager({entries,onSaved}:{entries:VideoEntry[];onSaved:()=>Promise<void>}){
+ const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ async function save(id:string,kind:string,file:File|undefined){if(!file)return;setBusy(true);setMessage('');try{if(file.size>2*1024*1024)throw new Error('इमेज अधिकतम 2 MB की रखें।');const res=await fetch(`/api/entries/${id}/artwork?kind=${kind}`,{method:'PUT',headers:{'Content-Type':file.type},body:file});if(!res.ok){const data=await res.json() as {error:string};throw new Error(data.error)}await onSaved();setMessage('इमेज सेव हो गई।')}catch(e){setMessage((e as Error).message)}finally{setBusy(false)}}
+ return <div className="upload-panel"><h2 className="text-2xl font-semibold">पोस्टर और थंबनेल</h2><p className="subtle">खड़ा पोस्टर: 3:4 · चौड़ा थंबनेल: 16:9 · JPG/PNG, अधिकतम 2 MB</p>{message&&<p className="notice" role="status">{message}</p>}{!entries.length?<p className="notice">पहले वीडियो अपलोड करें। फिर यहाँ उसकी इमेज बदल सकेंगे।</p>:entries.map(e=><div className="artwork-admin-row" key={e.id}><h3>{e.song} <span className="subtle">{e.singer}</span></h3><div className="form-grid"><label className="field">खड़ा पोस्टर {e.has_poster?'✓':''}<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={event=>{save(e.id,'poster',event.target.files?.[0]);event.target.value=''}}/></label><label className="field">चौड़ा थंबनेल {e.has_thumbnail?'✓':''}<input type="file" accept="image/jpeg,image/png" disabled={busy} onChange={event=>{save(e.id,'thumbnail',event.target.files?.[0]);event.target.value=''}}/></label></div></div>)}</div>
+}

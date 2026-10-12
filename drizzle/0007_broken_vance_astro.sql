@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `type_label` text DEFAULT '' NOT NULL;

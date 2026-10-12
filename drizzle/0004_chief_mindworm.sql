@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `voting_enabled` integer DEFAULT 0 NOT NULL;
