@@ -1,3 +1,4 @@
+import androidx.compose.foundation.verticalScroll
 package com.gondwana.prime
 
 import android.content.Intent
