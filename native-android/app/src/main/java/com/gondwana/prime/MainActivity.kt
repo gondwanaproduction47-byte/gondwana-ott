@@ -87,66 +87,43 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun GondwanaPrimeApp() {
     var user by remember { mutableStateOf<AuthUser?>(null) }
+    var showLogin by remember { mutableStateOf(false) }
     MaterialTheme(colorScheme = darkColorScheme(primary = Gold, background = Ink, surface = CardBg)) {
-        if (user == null) LoginScreen(onSuccess = { user = it }) else MainShell(user!!, onLogout = { user = null })
+        if (showLogin) LoginScreen(onSuccess = { user = it; showLogin = false }, onCancel = { showLogin = false })
+        else MainShell(user = user, onLogin = { showLogin = true }, onLogout = { user = null }, onWatch = { if (user == null) showLogin = true })
     }
 }
 
 @Composable
-private fun LoginScreen(onSuccess: (AuthUser) -> Unit) {
-    var register by remember { mutableStateOf(false) }
-    var identifier by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var city by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+private fun LoginScreen(onSuccess: (AuthUser) -> Unit, onCancel: () -> Unit = {}) {
+    var register by remember { mutableStateOf(false) }; var identifier by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }; var name by remember { mutableStateOf("") }; var city by remember { mutableStateOf("") }; var message by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }; val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(Modifier.height(48.dp))
-        Text("GP", color = Gold, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-        Text("GONDWANA PRIME", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(if (register) "नया खाता बनाएँ" else "अपने खाते में लॉगिन करें", color = Color.LightGray, modifier = Modifier.padding(top = 8.dp, bottom = 26.dp))
-        if (register) {
-            OutlinedTextField(name, { name = it }, label = { Text("नाम") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(city, { city = it }, label = { Text("शहर") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(10.dp))
-        }
-        OutlinedTextField(identifier, { identifier = it }, label = { Text("मोबाइल या ईमेल") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(password, { password = it }, label = { Text("पासवर्ड") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Spacer(Modifier.height(36.dp)); Text("GP", color = Gold, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold); Text("GONDWANA PRIME", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text(if (register) "नया खाता बनाएँ" else "फिल्म देखने के लिए लॉगिन करें", color = Color.LightGray, modifier = Modifier.padding(top = 8.dp, bottom = 22.dp))
+        if (register) { OutlinedTextField(name, { name = it }, label = { Text("नाम") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(10.dp)); OutlinedTextField(city, { city = it }, label = { Text("शहर") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(10.dp)) }
+        OutlinedTextField(identifier, { identifier = it }, label = { Text("Gmail या मोबाइल") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(10.dp)); OutlinedTextField(password, { password = it }, label = { Text("पासवर्ड") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         if (message.isNotBlank()) Text(message, color = Color(0xFFFFB4AB), modifier = Modifier.padding(top = 12.dp))
-        Button(enabled = !busy && identifier.isNotBlank() && password.length >= 6, onClick = {
-            busy = true; message = ""
-            scope.launch(Dispatchers.Main) {
-                try { onSuccess(if (register) SupabaseApi.signUp(identifier.trim(), password, name.trim(), city.trim()) else SupabaseApi.signIn(identifier.trim(), password)) }
-                catch (e: Exception) { message = e.message ?: "कृपया फिर कोशिश करें" }
-                finally { busy = false }
-            }
-        }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) { Text(if (busy) "कृपया प्रतीक्षा करें…" else if (register) "रजिस्टर करें" else "लॉगिन करें") }
-        TextButton(onClick = { register = !register; message = "" }) { Text(if (register) "पहले से खाता है? लॉगिन" else "नया खाता बनाएँ", color = Gold) }
-        Text("बिना OTP: मोबाइल/ईमेल और पासवर्ड से प्रवेश", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+        Button(enabled = !busy && identifier.isNotBlank() && password.length >= 6, onClick = { busy = true; message = ""; scope.launch(Dispatchers.Main) { try { onSuccess(if (register) SupabaseApi.signUp(identifier.trim(), password, name.trim(), city.trim()) else SupabaseApi.signIn(identifier.trim(), password)) } catch (e: Exception) { message = e.message ?: "कृपया फिर कोशिश करें" } finally { busy = false } } }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) { Text(if (busy) "कृपया प्रतीक्षा करें…" else if (register) "रजिस्टर करें" else "लॉगिन करें") }
+        TextButton(onClick = { register = !register; message = "" }) { Text(if (register) "पहले से खाता है? लॉगिन" else "नया खाता बनाएँ", color = Gold) }; TextButton(onClick = onCancel) { Text("बाद में", color = Color.LightGray) }
     }
 }
 
 @Composable
-private fun MainShell(user: AuthUser, onLogout: () -> Unit) {
+private fun MainShell(user: AuthUser?, onLogin: () -> Unit, onLogout: () -> Unit, onWatch: () -> Unit) {
     var selected by remember { mutableStateOf("होम") }
     Scaffold(containerColor = Ink, bottomBar = { NavigationBar(containerColor = CardBg) { listOf("होम", "फिल्में", "इवेंट", "मेरा खाता").forEach { item -> NavigationBarItem(selected = selected == item, onClick = { selected = item }, icon = { Text(if (item == "होम") "⌂" else "•") }, label = { Text(item) }) } } }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Header()
-            if (selected == "होम") { HeroBanner(); Section("लेटेस्ट इवेंट", listOf("सिंगिंग ऑडिशन", "डांस चैंपियनशिप", "ग्रैंड फिनाले")); Section("फिल्में", listOf("जंगल सत्याग्रह", "वन योद्धा", "नई कहानी")); Section("वेब सीरीज़", listOf("एपिसोड 1", "एपिसोड 2", "आने वाला एपिसोड")) }
-            else if (selected == "मेरा खाता") { if (user.role == "admin") AdminScreen(user) else AccountView(user, onLogout) }
-            else { Text(selected, color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text("यह सेक्शन जल्द अपडेट किया जाएगा।", color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)) }
+            if (selected == "होम") { HeroBanner(onWatch); Section("लेटेस्ट इवेंट", listOf("सिंगिंग ऑडिशन", "डांस चैंपियनशिप", "ग्रैंड फिनाले"), onWatch); Section("फिल्में", listOf("जंगल सत्याग्रह", "वन योद्धा", "नई कहानी"), onWatch); Section("वेब सीरीज़", listOf("एपिसोड 1", "एपिसोड 2", "आने वाला एपिसोड"), onWatch) }
+            else if (selected == "मेरा खाता") { if (user?.role == "admin") AdminScreen(user) else AccountView(user, onLogin, onLogout) }
+            else { Text(selected, color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text("वीडियो देखने के लिए किसी title पर tap करें।", color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)) }
         }
     }
 }
 
-@Composable private fun AccountView(user: AuthUser, onLogout: () -> Unit) { Text("मेरा खाता", color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text(user.label, color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)); TextButton(onClick = onLogout) { Text("लॉगआउट", color = Gold) } }
+@Composable private fun AccountView(user: AuthUser?, onLogin: () -> Unit, onLogout: () -> Unit) { Text("मेरा खाता", color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); if (user == null) { Text("Movie देखने पर ही login जरूरी है।", color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)); Button(onClick = onLogin, modifier = Modifier.padding(20.dp)) { Text("लॉगिन करें") } } else { Text(user.label, color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)); TextButton(onClick = onLogout) { Text("लॉगआउट", color = Gold) } } }
 
 @Composable private fun AdminScreen(user: AuthUser) { var title by remember { mutableStateOf("") }; var type by remember { mutableStateOf("movie") }; var videoUrl by remember { mutableStateOf("") }; var posterUrl by remember { mutableStateOf("") }; var message by remember { mutableStateOf("") }; var playUrl by remember { mutableStateOf("") }; val scope = rememberCoroutineScope(); Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState())) { Text("Admin Upload", color = Gold, style = MaterialTheme.typography.labelLarge); Text("वीडियो प्रकाशित करें", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp)); OutlinedTextField(title, { title = it }, label = { Text("वीडियो नाम") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(type, { type = it }, label = { Text("Type: movie / web_series / event") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(videoUrl, { videoUrl = it }, label = { Text("Direct MP4 / R2 video URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(posterUrl, { posterUrl = it }, label = { Text("Poster URL (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Button(onClick = { scope.launch { try { SupabaseApi.saveContent(user.token, user.id, title, type, videoUrl, posterUrl); message = "Published successfully"; playUrl = videoUrl } catch (e: Exception) { message = e.message ?: "Upload failed" } } }, enabled = title.isNotBlank() && videoUrl.startsWith("http"), modifier = Modifier.fillMaxWidth().padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Publish Video") }; if (message.isNotBlank()) Text(message, color = Gold, modifier = Modifier.padding(top = 10.dp)); if (playUrl.isNotBlank()) { Text("Video Preview", color = Color.White, modifier = Modifier.padding(top = 18.dp)); AndroidView(factory = { context -> VideoView(context) }, update = { view -> view.setVideoURI(Uri.parse(playUrl)); view.setOnPreparedListener { it.isLooping = false; view.start() } }, modifier = Modifier.fillMaxWidth().height(220.dp)) } } }
 
 @Composable private fun Header() { Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(48.dp).background(Color(0xFF38253D), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("GP", color = Gold, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(12.dp)); Column { Text("GONDWANA PRIME", color = Color.White, fontWeight = FontWeight.Bold); Text("OTT · EVENTS & CINEMA", color = Gold, style = MaterialTheme.typography.labelSmall) }; Spacer(Modifier.weight(1f)); Text("⌕", color = Color.White, style = MaterialTheme.typography.headlineMedium) } }
-@Composable private fun HeroBanner() { Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(22.dp)) { Box(Modifier.height(210.dp).fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF452449), Color(0xFF16121D))))) { Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("GONDWANA ORIGINAL", color = Gold, style = MaterialTheme.typography.labelMedium); Text("जंगल सत्याग्रह", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold); Text("The Untold History · Coming Soon", color = Color.LightGray); Spacer(Modifier.height(10.dp)); Button(onClick = {}, colors = ButtonDefaults.buttonColors(containerColor = Gold)) { Text("अभी देखें", color = Ink) } } } } }
-@Composable private fun Section(title: String, itemsList: List<String>) { Column(Modifier.padding(top = 24.dp)) { Text(title, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp)); Spacer(Modifier.height(10.dp)); LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { items(itemsList) { name -> Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.width(150.dp).height(105.dp)) { Column(Modifier.fillMaxSize().background(CardBg).padding(12.dp), verticalArrangement = Arrangement.Bottom) { Text(name, color = Color.White, fontWeight = FontWeight.SemiBold); Text("▶ Watch", color = Gold, style = MaterialTheme.typography.labelSmall) } } } } } }
+@Composable private fun HeroBanner(onWatch: () -> Unit) { Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(22.dp)) { Box(Modifier.height(210.dp).fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF452449), Color(0xFF16121D))))) { Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("GONDWANA ORIGINAL", color = Gold, style = MaterialTheme.typography.labelMedium); Text("जंगल सत्याग्रह", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold); Text("The Untold History · Coming Soon", color = Color.LightGray); Spacer(Modifier.height(10.dp)); Button(onClick = onWatch, colors = ButtonDefaults.buttonColors(containerColor = Gold)) { Text("अभी देखें", color = Ink) } } } } }
+@Composable private fun Section(title: String, itemsList: List<String>, onWatch: () -> Unit) { Column(Modifier.padding(top = 24.dp)) { Text(title, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp)); Spacer(Modifier.height(10.dp)); LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { items(itemsList) { name -> Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.width(150.dp).height(105.dp)) { Column(Modifier.fillMaxSize().background(CardBg).padding(12.dp), verticalArrangement = Arrangement.Bottom) { Text(name, color = Color.White, fontWeight = FontWeight.SemiBold); TextButton(onClick = onWatch, contentPadding = PaddingValues(0.dp)) { Text("▶ Watch", color = Gold, style = MaterialTheme.typography.labelSmall) } } } } } } }
