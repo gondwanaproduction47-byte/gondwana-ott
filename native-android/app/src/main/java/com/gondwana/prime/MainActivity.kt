@@ -1,6 +1,9 @@
 package com.gondwana.prime
 
 import android.os.Bundle
+import android.net.Uri
+import android.widget.VideoView
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -23,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -32,7 +36,7 @@ private val Gold = Color(0xFFEBC36E)
 private val Ink = Color(0xFF0D0B12)
 private val CardBg = Color(0xFF1B1623)
 
-private data class AuthUser(val id: String, val token: String, val label: String)
+private data class AuthUser(val id: String, val token: String, val label: String, val role: String = "user")
 
 private object SupabaseApi {
     private fun request(path: String, method: String, body: String? = null, token: String? = null): JSONObject {
@@ -52,7 +56,18 @@ private object SupabaseApi {
         val key = if (identifier.contains("@")) "email" else "phone"
         val json = request("/auth/v1/token?grant_type=password", "POST", JSONObject().put(key, identifier).put("password", password).toString())
         val user = json.getJSONObject("user")
-        AuthUser(user.getString("id"), json.getString("access_token"), identifier)
+        AuthUser(user.getString("id"), json.getString("access_token"), identifier, profileRole(json.getString("access_token"), user.getString("id")))
+    }
+    private fun profileRole(token: String, id: String): String {
+        return try {
+            val c = (URL(SUPABASE_URL + "/rest/v1/profiles?id=eq." + id + "&select=role").openConnection() as HttpURLConnection)
+            c.requestMethod = "GET"; c.setRequestProperty("apikey", SUPABASE_KEY); c.setRequestProperty("Authorization", "Bearer $token")
+            val text = c.inputStream.bufferedReader().use { it.readText() }
+            JSONArray(text).optJSONObject(0)?.optString("role", "user") ?: "user"
+        } catch (_: Exception) { "user" }
+    }
+    suspend fun saveContent(token: String, ownerId: String, title: String, type: String, videoUrl: String, posterUrl: String): Unit = withContext(Dispatchers.IO) {
+        request("/rest/v1/content", "POST", JSONObject().put("title", title).put("content_type", type).put("video_url", videoUrl).put("poster_url", posterUrl).put("status", "published").put("owner_id", ownerId).toString(), token)
     }
     suspend fun signUp(identifier: String, password: String, name: String, city: String): AuthUser = withContext(Dispatchers.IO) {
         val key = if (identifier.contains("@")) "email" else "phone"
@@ -61,7 +76,7 @@ private object SupabaseApi {
         val user = json.optJSONObject("user") ?: throw IllegalStateException("Email/phone confirmation required in Supabase")
         val token = json.optString("access_token")
         if (token.isBlank()) throw IllegalStateException("Registration complete. Please confirm your account, then login.")
-        AuthUser(user.getString("id"), token, identifier)
+        AuthUser(user.getString("id"), token, identifier, "user")
     }
 }
 
@@ -122,11 +137,15 @@ private fun MainShell(user: AuthUser, onLogout: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Header()
             if (selected == "होम") { HeroBanner(); Section("लेटेस्ट इवेंट", listOf("सिंगिंग ऑडिशन", "डांस चैंपियनशिप", "ग्रैंड फिनाले")); Section("फिल्में", listOf("जंगल सत्याग्रह", "वन योद्धा", "नई कहानी")); Section("वेब सीरीज़", listOf("एपिसोड 1", "एपिसोड 2", "आने वाला एपिसोड")) }
-            else if (selected == "मेरा खाता") { Text("मेरा खाता", color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text(user.label, color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)); TextButton(onClick = onLogout) { Text("लॉगआउट", color = Gold) } }
+            else if (selected == "मेरा खाता") { if (user.role == "admin") AdminScreen(user) else AccountView(user, onLogout) }
             else { Text(selected, color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text("यह सेक्शन जल्द अपडेट किया जाएगा।", color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)) }
         }
     }
 }
+
+@Composable private fun AccountView(user: AuthUser, onLogout: () -> Unit) { Text("मेरा खाता", color = Color.White, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(20.dp)); Text(user.label, color = Color.LightGray, modifier = Modifier.padding(horizontal = 20.dp)); TextButton(onClick = onLogout) { Text("लॉगआउट", color = Gold) } }
+
+@Composable private fun AdminScreen(user: AuthUser) { var title by remember { mutableStateOf("") }; var type by remember { mutableStateOf("movie") }; var videoUrl by remember { mutableStateOf("") }; var posterUrl by remember { mutableStateOf("") }; var message by remember { mutableStateOf("") }; var playUrl by remember { mutableStateOf("") }; val scope = rememberCoroutineScope(); Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState())) { Text("Admin Upload", color = Gold, style = MaterialTheme.typography.labelLarge); Text("वीडियो प्रकाशित करें", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp)); OutlinedTextField(title, { title = it }, label = { Text("वीडियो नाम") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(type, { type = it }, label = { Text("Type: movie / web_series / event") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(videoUrl, { videoUrl = it }, label = { Text("Direct MP4 / R2 video URL") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Spacer(Modifier.height(8.dp)); OutlinedTextField(posterUrl, { posterUrl = it }, label = { Text("Poster URL (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true); Button(onClick = { scope.launch { try { SupabaseApi.saveContent(user.token, user.id, title, type, videoUrl, posterUrl); message = "Published successfully"; playUrl = videoUrl } catch (e: Exception) { message = e.message ?: "Upload failed" } } }, enabled = title.isNotBlank() && videoUrl.startsWith("http"), modifier = Modifier.fillMaxWidth().padding(top = 12.dp), colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink)) { Text("Publish Video") }; if (message.isNotBlank()) Text(message, color = Gold, modifier = Modifier.padding(top = 10.dp)); if (playUrl.isNotBlank()) { Text("Video Preview", color = Color.White, modifier = Modifier.padding(top = 18.dp)); AndroidView(factory = { context -> VideoView(context) }, update = { view -> view.setVideoURI(Uri.parse(playUrl)); view.setOnPreparedListener { it.isLooping = false; view.start() } }, modifier = Modifier.fillMaxWidth().height(220.dp)) } } }
 
 @Composable private fun Header() { Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(48.dp).background(Color(0xFF38253D), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("GP", color = Gold, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(12.dp)); Column { Text("GONDWANA PRIME", color = Color.White, fontWeight = FontWeight.Bold); Text("OTT · EVENTS & CINEMA", color = Gold, style = MaterialTheme.typography.labelSmall) }; Spacer(Modifier.weight(1f)); Text("⌕", color = Color.White, style = MaterialTheme.typography.headlineMedium) } }
 @Composable private fun HeroBanner() { Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(22.dp)) { Box(Modifier.height(210.dp).fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF452449), Color(0xFF16121D))))) { Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) { Text("GONDWANA ORIGINAL", color = Gold, style = MaterialTheme.typography.labelMedium); Text("जंगल सत्याग्रह", color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold); Text("The Untold History · Coming Soon", color = Color.LightGray); Spacer(Modifier.height(10.dp)); Button(onClick = {}, colors = ButtonDefaults.buttonColors(containerColor = Gold)) { Text("अभी देखें", color = Ink) } } } } }
