@@ -1,4 +1,4 @@
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.verticalScro
 
 package com.gondwana.prime
 
