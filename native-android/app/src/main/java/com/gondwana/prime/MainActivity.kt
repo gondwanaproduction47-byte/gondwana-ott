@@ -1,7 +1,6 @@
-import androidx.compose.foundation.verticalScroll
-
 package com.gondwana.prime
 
+import androidx.compose.foundation.verticalScroll
 
 import android.content.Intent
 import android.net.Uri
